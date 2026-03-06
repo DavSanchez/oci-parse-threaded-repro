@@ -1,0 +1,16 @@
+[package]
+name = "oci-pool-poc"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+dhat = { version = "0.3.3", optional = true }
+oci-spec = "0.9.0"
+oci-spec-fork = { package = "oci-spec", git = "https://github.com/DavSanchez/oci-spec-rs", branch = "refactor/no-regexp-reference-from-str" }
+
+[dev-dependencies]
+rstest = "0.26.1"
+
+[features]
+dhat-heap = ["dep:dhat"]
