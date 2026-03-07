@@ -2,7 +2,7 @@
 
 Proof-of-concept demonstrating unbounded per-thread memory growth in
 [`oci-spec-rs`](https://github.com/youki-dev/oci-spec-rs) when
-`Reference::from_str()` is called from many short-lived threads over the
+`Reference::from_str()` is called from many shorter-lived threads over the
 lifetime of a process.
 
 Accompanies the PR to `youki-dev/oci-spec-rs` that replaces the regex-based
@@ -14,17 +14,17 @@ parser with a hand-written procedural one.
 
 `Reference::from_str()` in `oci-spec-rs` validates the input with a compiled
 `regex::Regex`. The `regex` crate maintains a `Pool<meta::Cache>` — a pool of
-NFA/DFA execution-state caches — that I assume is keyed internally by OS thread ID. The pool
-grows on demand: the first time a thread touches the regex it is assigned a new
-slot (~5–6 MB). When the thread exits its slot is **returned** to the pool but
-**never freed or reused by a different thread ID**. A subsequent thread with a
-different ID seems to allocate a new slot.
+NFA/DFA execution-state caches — that I assume is keyed internally by OS thread
+ID. The pool grows on demand: the first time a thread touches the regex it is
+assigned a new slot (~5–6 MB). When the thread exits its slot is **returned** to
+the pool but **never freed or reused by a different thread ID**. A subsequent 
+thread with a different ID seems to allocate a new slot.
 
-The pool has a maximum number of slots before it starts re-using entries, but
-the memory already committed to earlier slots remains live for the lifetime of
-the process. In practice this means every "generation" of new threads (up to
-the pool's internal limit) causes a permanent RSS increase of ~5–6 MB, with no
-path to reclamation.
+The pool should have a maximum number of slots before it starts re-using entries,
+but the memory already committed to earlier slots remains live for the lifetime of
+the process. In practice this means every "generation" of new threads (up to the
+pool's internal limit) causes a permanent RSS increase of ~5–6 MB, with no frees
+apparent.
 
 ### Why this matters in practice
 
@@ -34,7 +34,10 @@ CI runner) will leak several megabytes of RSS per "generation" of threads.  The
 growth stops once the regex pool is fully populated, but the committed pages are
 never returned to the OS.
 
-We have observed this also increases with the length of the set of OCI references parsed (in this reproducer we use 2 OCI refs, but using 5, 8, etc, increased the RSS more).
+We have observed the apparent cap of this growth also increases with the length
+of the set of OCI references parsed. in this reproducer we cycle over 2 OCI refs,
+but using 5, 8, etc, increases the RSS more (I didn't write it down, but 6-8 refs
+capped the growth at 75+ MB as opposed to the ~50 MB of 2).
 
 ---
 
@@ -59,15 +62,18 @@ linux-reports/         # captures from Linux (x86-64)
 
 ## How the PoC works
 
-`src/main.rs` spawns **80 sequential threads** (one at a time, fully joined
-before the next is started). Each thread:
+`src/main.rs` spawns **80 sequential threads** (one at a time, joined before
+the next is started). Each thread:
 
 1. Calls `Reference::from_str()` on a real Docker Hub reference string.
 2. Sleeps 300 ms to simulate downstream work.
 3. Exits.
 
-After each thread exits, the main thread samples the process RSS with `ps`.
-With `--use-fork` the patched version of the crate is used instead.
+After each thread exits, the main thread samples the process RSS with `ps`
+and prints the value as a row to a table.
+
+With `--use-fork` the patched version of the crate is used instead, so
+quick comparisons can be made.
 
 The binary links both versions of the crate simultaneously so both can be
 compared in a single build:
@@ -94,6 +100,8 @@ cargo run --release --features dhat-heap
 cargo run --release --features dhat-heap -- --use-fork
 # Then open the resulting dhat-heap.json in https://nnethercote.github.io/dh_view/dh_view.html
 ```
+
+There are running occurrences at the GitHub [Actions](https://github.com/DavSanchez/oci-parse-threaded-repro/actions)
 
 ---
 
