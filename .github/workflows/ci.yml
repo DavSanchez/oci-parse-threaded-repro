@@ -6,8 +6,11 @@ on:
 
 jobs:
   run:
-    name: Run on Linux
-    runs-on: ubuntu-latest
+    name: Run on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
 
     steps:
       - uses: actions/checkout@v4
