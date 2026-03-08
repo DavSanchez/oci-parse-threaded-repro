@@ -23,9 +23,12 @@ static ALLOC: dhat::Alloc = dhat::Alloc;
 const CYCLES: usize = 80;
 const SLEEP_MS: u64 = 300; // simulates download/process work
 
-const OCI_REFS: [&str; 2] = [
+const OCI_REFS: [&str; 5] = [
     "docker.io/newrelic/infrastructure-agent-artifacts:1.71.1",
     "docker.io/newrelic/nrdot-agent-artifacts:1.11.0",
+    "docker.io/myreporandom/myrandomocipackage:latest",
+    "docker.io/myrandomrepo/randomcosa:1.24.6",
+    "test:5000/repo:tag@sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 ];
 
 fn main() {
