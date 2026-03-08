@@ -40,7 +40,10 @@ fn main() {
     println!(
         "Each thread represents one 'Subagent runtime' cycle (old thread exits, new spawned).\n"
     );
+    #[cfg(target_family = "unix")]
     println!("{:>6}  {:>12}  thread_id", "cycle", "rss (KB)");
+    #[cfg(target_family = "windows")]
+    println!("{:>6}  {:>12}  thread_id", "cycle", "ws (KB)");
 
     let mut oci_refs = OCI_REFS.into_iter().cycle();
 
@@ -73,26 +76,31 @@ fn main() {
 }
 
 fn rss_kb() -> u64 {
-    // let s = std::fs::read_to_string("/proc/self/statm").unwrap_or_default();
-    // let pages: u64 = s
-    //     .split_whitespace()
-    //     .nth(1)
-    //     .unwrap_or("0")
-    //     .parse()
-    //     .unwrap_or(0);
-    // pages * 4 // assume 4 KB pages
+    let pid = std::process::id();
+
     #[cfg(target_family = "unix")]
-    {
-        let out = std::process::Command::new("ps")
-            .args(["-o", "rss=", "-p", &std::process::id().to_string()])
-            .output()
-            .map(|o| o.stdout)
-            .unwrap_or_default();
-        String::from_utf8_lossy(&out)
-            .trim()
-            .parse::<u64>()
-            .unwrap_or(0)
-    }
-    #[cfg(not(target_family = "unix"))]
-    compile_error!("rss_kb() is only implemented for Unix-like OSes");
+    let out = std::process::Command::new("ps")
+        .args(["-o", "rss=", "-p", &pid.to_string()])
+        .output()
+        .map(|o| o.stdout)
+        .unwrap_or_default();
+
+    #[cfg(target_family = "windows")]
+    let out = std::process::Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            &format!("[int64]((Get-Process -Id {pid}).WorkingSet64 / 1024)"),
+        ])
+        .output()
+        .map(|o| o.stdout)
+        .unwrap_or_default();
+
+    #[cfg(not(any(target_family = "unix", target_family = "windows")))]
+    let out = b"0".to_vec();
+
+    String::from_utf8_lossy(&out)
+        .trim()
+        .parse::<u64>()
+        .unwrap_or(0)
 }
